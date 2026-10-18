@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en" class="h-full w-full bg-stone-950 overflow-hidden select-none">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AK-47 Tactical Operator: WebGPU Military Compound</title>
+    <meta name="description" content="High-performance first-person tactical shooter in Babylon.js and WebGPU with an AK-47 assault rifle, modular anatomical health, cover-seeking AI combatants, humanoid character models, and outdoor military testing playground." />
+    <meta property="og:title" content="AK-47 Tactical Operator: WebGPU Military Compound" />
+    <meta property="og:description" content="High-performance first-person tactical shooter in Babylon.js and WebGPU with an AK-47 assault rifle, modular anatomical health, cover-seeking AI combatants, humanoid character models, and outdoor military testing playground." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/src/index.css" />
+  </head>
+  <body class="h-full w-full m-0 p-0 overflow-hidden bg-stone-950 text-stone-100 font-sans antialiased">
+    <!-- 3D BABYLON CANVAS -->
+    <canvas id="renderCanvas" class="w-full h-full block touch-none outline-none select-none"></canvas>
+
+    <!-- HTML5 TACTICAL HUD OVERLAY -->
+    <div id="tacticalHud" class="fixed inset-0 pointer-events-none z-10 flex flex-col justify-between p-3 sm:p-5 hidden">
+      
+      <!-- TOP HUD: COMPASS, SAFE ZONE BANNER & MISSION SCORE -->
+      <div class="flex items-start justify-between w-full">
+        <!-- Tactical Radio Comms Feed -->
+        <div id="radioBox" class="bg-stone-900/85 backdrop-blur-md border border-stone-700/60 rounded-lg p-2.5 max-w-xs sm:max-w-sm flex items-start gap-2.5 shadow-lg">
+          <div class="w-8 h-8 rounded bg-amber-900/60 border border-amber-600/50 flex items-center justify-center text-amber-400 font-bold text-xs shrink-0 font-mono">
+            SGT
+          </div>
+          <div class="text-xs">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-amber-400 tracking-wide uppercase text-[10px]">Sgt. Vance · Comms</span>
+              <span class="text-stone-400 text-[10px] font-mono">CH-1</span>
+            </div>
+            <p id="radioMessage" class="text-stone-200 mt-0.5 leading-tight text-[11px]">
+              Armory safe zone. Step past yellow line to enter live combat.
+            </p>
+          </div>
+        </div>
+
+        <!-- Center: Zone Status & Dynamic Horizon Compass -->
+        <div class="flex flex-col items-center gap-1">
+          <!-- Safe Zone / Combat Zone Badge -->
+          <div id="zoneBadge" class="bg-emerald-950/90 border border-emerald-600/60 text-emerald-400 text-[10px] font-mono font-bold px-3 py-0.5 rounded-full uppercase tracking-wider shadow">
+            ARMORY SAFE ZONE · WEAPONS COLD
+          </div>
+
+          <div class="bg-stone-900/85 backdrop-blur-md border border-stone-700/60 rounded-lg px-3.5 py-1 flex items-center gap-2 shadow-lg">
+            <span class="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest">BEARING</span>
+            <span id="compassBearing" class="text-xs font-mono font-bold text-white tabular-nums">000° N</span>
+          </div>
+          <!-- Compass tick ruler -->
+          <div class="w-40 h-1 bg-stone-800/80 rounded-full overflow-hidden relative border border-stone-700/50">
+            <div id="compassIndicator" class="absolute top-0 bottom-0 w-2 bg-amber-500 rounded-full transition-all duration-75"></div>
+          </div>
+        </div>
+
+        <!-- Mission Scoreboard -->
+        <div class="bg-stone-900/85 backdrop-blur-md border border-stone-700/60 rounded-lg p-2.5 min-w-[175px] shadow-lg flex flex-col gap-1">
+          <div class="flex items-center justify-between text-xs border-b border-stone-700/50 pb-1">
+            <span class="text-stone-400 font-mono uppercase text-[9px]">Active Drill</span>
+            <span id="hudDrillName" class="font-bold text-amber-400 text-[10px]">Free Practice</span>
+          </div>
+          <div class="flex items-center justify-between text-[11px] font-mono">
+            <span class="text-stone-400">Score:</span>
+            <span id="hudScore" class="font-bold text-white tabular-nums">0</span>
+          </div>
+          <div class="flex items-center justify-between text-[11px] font-mono">
+            <span class="text-stone-400">Hostiles:</span>
+            <span id="hudHostiles" class="font-bold text-red-400 tabular-nums">0 Active</span>
+          </div>
+          <div class="flex items-center justify-between text-[11px] font-mono">
+            <span class="text-stone-400">Targets Hit:</span>
+            <span id="hudTargets" class="font-bold text-emerald-400 tabular-nums">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER SCREEN: DYNAMIC RETICLE & HITMARKERS -->
+      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <!-- ADS Overlay -->
+        <div id="adsOverlay" class="absolute inset-0 bg-radial from-transparent via-transparent to-stone-950/60 opacity-0 transition-opacity duration-150 pointer-events-none"></div>
+
+        <!-- Crosshair Reticle -->
+        <div id="crosshair" class="relative w-8 h-8 flex items-center justify-center transition-all duration-75">
+          <div class="w-1 h-1 bg-amber-400 rounded-full shadow-[0_0_4px_rgba(251,191,36,0.8)]"></div>
+          <div id="chTop" class="absolute top-0 w-0.5 h-2 bg-white/90 -translate-y-1 rounded-sm"></div>
+          <div id="chBottom" class="absolute bottom-0 w-0.5 h-2 bg-white/90 translate-y-1 rounded-sm"></div>
+          <div id="chLeft" class="absolute left-0 h-0.5 w-2 bg-white/90 -translate-x-1 rounded-sm"></div>
+          <div id="chRight" class="absolute right-0 h-0.5 w-2 bg-white/90 translate-x-1 rounded-sm"></div>
+
+          <!-- Hitmarker X -->
+          <div id="hitmarker" class="absolute inset-0 opacity-0 scale-90 transition-all duration-75 flex items-center justify-center">
+            <svg class="w-6 h-6 text-red-500 drop-shadow-[0_0_6px_rgba(239,68,68,0.9)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+              <line x1="4" y1="4" x2="9" y2="9"></line>
+              <line x1="20" y1="4" x2="15" y2="9"></line>
+              <line x1="4" y1="20" x2="9" y2="15"></line>
+              <line x1="20" y1="20" x2="15" y2="15"></line>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Directional Damage Flash Arcs -->
+        <div id="damageIndicator" class="absolute w-64 h-64 rounded-full border-4 border-red-600/0 transition-all duration-150 opacity-0"></div>
+      </div>
+
+      <!-- INTERACTION PROMPT (Center-Bottom) -->
+      <div id="interactionPromptContainer" class="flex justify-center w-full mb-1 opacity-0 transition-opacity duration-150">
+        <div class="bg-stone-900/90 backdrop-blur-md border border-amber-500/60 rounded-lg px-4 py-1.5 flex items-center gap-2 shadow-xl animate-pulse">
+          <span class="text-amber-400 font-bold text-xs uppercase font-mono tracking-wide" id="interactionPromptText">[E] Interact</span>
+        </div>
+      </div>
+
+      <!-- BOTTOM HUD: MODULAR ANATOMICAL HEALTH, IFAK MEDKIT & AK-47 -->
+      <div class="flex items-end justify-between w-full">
+        <!-- MODULAR ANATOMICAL HEALTH MONITOR -->
+        <div class="bg-stone-900/90 backdrop-blur-md border border-stone-700/70 rounded-lg p-3 min-w-[270px] shadow-xl flex flex-col gap-2">
+          <div class="flex items-center justify-between border-b border-stone-700/60 pb-1">
+            <span class="font-bold text-xs text-stone-200 font-mono flex items-center gap-1.5">
+              <span class="text-emerald-400">●</span> OPERATOR VITALS
+            </span>
+            <span id="vitalityNum" class="font-bold text-xs font-mono text-emerald-400 tabular-nums">100% STABLE</span>
+          </div>
+
+          <!-- Anatomical Components Matrix -->
+          <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono">
+            <!-- Head -->
+            <div class="flex items-center justify-between">
+              <span class="text-stone-400">Head:</span>
+              <span id="partHead" class="font-bold text-emerald-400 tabular-nums">100%</span>
+            </div>
+            <!-- Abdomen -->
+            <div class="flex items-center justify-between">
+              <span class="text-stone-400">Abdomen:</span>
+              <span id="partAbdomen" class="font-bold text-emerald-400 tabular-nums">100%</span>
+            </div>
+            <!-- Thorax / Organs -->
+            <div class="flex items-center justify-between">
+              <span class="text-stone-400">Thorax:</span>
+              <span id="partThorax" class="font-bold text-emerald-400 tabular-nums">100%</span>
+            </div>
+            <!-- Arms -->
+            <div class="flex items-center justify-between">
+              <span class="text-stone-400">Arms:</span>
+              <span id="partArms" class="font-bold text-emerald-400 tabular-nums">100%</span>
+            </div>
+            <!-- Legs -->
+            <div class="flex items-center justify-between">
+              <span class="text-stone-400">Legs:</span>
+              <span id="partLegs" class="font-bold text-emerald-400 tabular-nums">100%</span>
+            </div>
+            <!-- Stamina -->
+            <div class="flex items-center justify-between">
+              <span class="text-stone-400">Stamina:</span>
+              <span id="staminaNum" class="font-bold text-amber-400 tabular-nums">100%</span>
+            </div>
+          </div>
+
+          <!-- NIJ Level III/IV Ballistic Plate Integrity -->
+          <div class="flex flex-col gap-1 border-t border-stone-800 pt-1.5">
+            <div class="flex items-center justify-between text-[10px] font-mono">
+              <span class="text-stone-300 font-bold flex items-center gap-1">
+                <span class="text-cyan-400">🛡</span> LEVEL IV CHEST PLATE
+              </span>
+              <span id="plateNum" class="font-bold text-cyan-400 tabular-nums">100%</span>
+            </div>
+            <div class="w-full h-1.5 bg-stone-800 rounded-full overflow-hidden border border-stone-700/60">
+              <div id="plateBar" class="h-full bg-cyan-400 transition-all duration-150 rounded-full w-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CENTER BOTTOM: EQUIPPABLE IFAK MEDKIT QUICKSLOT -->
+        <div class="pointer-events-auto flex flex-col items-center gap-1">
+          <button id="medkitBtn" class="bg-stone-900/90 hover:bg-stone-800 border border-stone-700 hover:border-emerald-500 rounded-lg p-2.5 flex items-center gap-2.5 shadow-xl transition-all cursor-pointer">
+            <div class="w-8 h-8 rounded bg-emerald-950 border border-emerald-600 flex items-center justify-center text-emerald-400 text-sm font-bold">
+              ✚
+            </div>
+            <div class="text-left font-mono">
+              <div class="text-[10px] text-stone-400 flex items-center gap-1.5">
+                <span>IFAK MEDKIT</span>
+                <span class="text-amber-400 font-bold">[4 / G]</span>
+              </div>
+              <div class="text-xs font-bold text-white flex items-center gap-1">
+                <span>STOCK:</span>
+                <span id="medkitCount" class="text-emerald-400 tabular-nums">2</span>
+              </div>
+            </div>
+          </button>
+          <!-- Field Dressing Progress Bar -->
+          <div id="healingProgressContainer" class="w-32 h-1 bg-stone-800 rounded-full overflow-hidden opacity-0 transition-opacity">
+            <div id="healingProgressBar" class="h-full bg-emerald-400 w-0"></div>
+          </div>
+        </div>
+
+        <!-- RIGHT BOTTOM: AK-47 WEAPON STATUS -->
+        <div class="bg-stone-900/90 backdrop-blur-md border border-stone-700/70 rounded-lg p-3 min-w-[240px] shadow-xl flex flex-col gap-2">
+          <div class="flex items-center justify-between border-b border-stone-700/60 pb-1">
+            <div>
+              <span class="font-extrabold text-xs text-stone-100 tracking-wide font-mono">AK-47 KALASHNIKOV</span>
+              <div class="text-[9px] font-mono text-stone-400">7.62 × 39mm SOVIET</div>
+            </div>
+            <button id="fireModeBtn" class="pointer-events-auto bg-stone-800 hover:bg-stone-700 border border-stone-600 rounded px-2 py-0.5 text-[10px] font-mono font-bold text-amber-400 transition-colors">
+              [B] AUTO
+            </button>
+          </div>
+
+          <!-- Ammo Counter -->
+          <div class="flex items-baseline justify-between pt-0.5">
+            <div class="flex items-baseline gap-1">
+              <span id="magAmmo" class="text-3xl font-extrabold font-mono text-amber-400 tabular-nums">30</span>
+              <span class="text-base font-mono text-stone-500">/</span>
+              <span id="reserveAmmo" class="text-base font-bold font-mono text-stone-300 tabular-nums">120</span>
+            </div>
+            <div id="reloadIndicator" class="text-[11px] font-mono text-stone-400 uppercase">
+              READY
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- MOBILE TOUCH CONTROLS OVERLAY (Ergonomic Dual-Thumb Layout for Samsung Galaxy Tab S8 & Mobile) -->
+    <div id="touchControlsOverlay" class="fixed inset-0 pointer-events-none z-30 select-none touch-none">
+      
+      <!-- LEFT THUMB ZONE: ANALOG JOYSTICK & SPRINT CONTROLS -->
+      <div id="leftThumbZone" class="absolute bottom-6 left-6 sm:bottom-10 sm:left-10 w-64 h-64 pointer-events-auto flex items-end justify-start">
+        <!-- Virtual Joystick Base -->
+        <div id="virtualJoystickBase" class="relative w-36 h-36 sm:w-40 sm:h-40 rounded-full bg-stone-900/40 border-2 border-stone-600/70 backdrop-blur-md flex items-center justify-center shadow-2xl active:border-amber-500/80 transition-colors touch-none">
+          <!-- Crosshair Guidelines & Forward Sprint Indicator -->
+          <div class="absolute inset-x-4 top-1/2 h-px bg-stone-600/40"></div>
+          <div class="absolute inset-y-4 left-1/2 w-px bg-stone-600/40"></div>
+          <div class="absolute top-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-amber-400/80 font-bold uppercase tracking-wider flex items-center gap-0.5">
+            <span>▲</span><span>RUN</span>
+          </div>
+          
+          <!-- Tactile Joystick Thumb Knob -->
+          <div id="virtualJoystickKnob" class="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-gradient-to-b from-stone-700/80 via-stone-800/90 to-stone-950/95 border-2 border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.35)] flex items-center justify-center pointer-events-none transition-transform duration-75">
+            <div class="w-5 h-5 rounded-full bg-amber-400/90 shadow-[0_0_6px_rgba(251,191,36,0.8)]"></div>
+          </div>
+        </div>
+
+        <!-- Sprint Lock Toggle Button -->
+        <button id="touchSprintLockBtn" class="absolute -top-1 left-12 px-3 py-1.5 rounded-full bg-stone-900/75 border border-stone-600/80 text-[10px] font-mono font-bold text-stone-300 backdrop-blur-md flex items-center gap-1.5 shadow-lg active:scale-95 transition-all cursor-pointer pointer-events-auto">
+          <span id="sprintLockIcon" class="text-amber-400">⚡</span>
+          <span id="sprintLockText">SPRINT</span>
+        </button>
+      </div>
+
+      <!-- LEFT SECONDARY FIRE BUTTON (Convenient for 2-thumb or claw grip on Samsung Galaxy Tab S8) -->
+      <button id="touchLeftFireBtn" class="absolute left-6 bottom-72 sm:left-10 sm:bottom-80 w-14 h-14 rounded-full bg-red-950/70 active:bg-red-600 border-2 border-red-500/80 backdrop-blur-md pointer-events-auto flex items-center justify-center text-red-300 active:text-white shadow-xl cursor-pointer active:scale-95 transition-all touch-none">
+        <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="3.5"/>
+          <path d="M12 2v4m0 12v4M2 12h4m12 0h4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <!-- RIGHT THUMB ZONE: SWIPE LOOK AREA & COMBAT ACTION CLUSTER -->
+      <!-- Swipe-to-aim surface covering right 60% of viewport -->
+      <div id="touchLookZone" class="absolute top-16 bottom-0 right-0 w-3/5 pointer-events-auto touch-none">
+        <!-- Right Thumb Ergonomic Cluster for 11-inch Galaxy Tab S8 -->
+        <div class="absolute bottom-6 right-6 sm:bottom-10 sm:right-10 flex flex-col items-end gap-3 pointer-events-none">
+          
+          <!-- Upper Row: CONTEXTUAL INTERACT, IFAK MEDKIT, RELOAD, FIRE MODE -->
+          <div class="flex items-center gap-2.5 pointer-events-auto">
+            <!-- Contextual Touch Interact [E] Button -->
+            <button id="touchInteractBtn" class="hidden px-4 py-2.5 rounded-xl bg-amber-500 active:bg-amber-400 text-stone-950 font-mono font-black text-xs shadow-[0_0_20px_rgba(245,158,11,0.7)] animate-pulse flex items-center gap-1.5 cursor-pointer border border-amber-300 active:scale-95 transition-transform touch-none">
+              <span>🤝 INTERACT</span>
+            </button>
+
+            <!-- Touch Medkit Button -->
+            <button id="touchMedkitBtn" class="w-13 h-13 rounded-full bg-emerald-950/75 active:bg-emerald-600 border-2 border-emerald-500/80 backdrop-blur-md flex flex-col items-center justify-center text-emerald-400 active:text-white shadow-xl cursor-pointer active:scale-95 transition-transform touch-none">
+              <span class="text-base font-bold leading-none">✚</span>
+              <span id="touchMedkitCount" class="text-[9px] font-mono font-bold leading-tight">2</span>
+            </button>
+
+            <!-- Touch Reload Button -->
+            <button id="touchReloadBtn" class="w-13 h-13 rounded-full bg-stone-900/70 active:bg-stone-700 border-2 border-stone-600/80 backdrop-blur-md flex flex-col items-center justify-center text-stone-300 active:text-amber-400 shadow-xl cursor-pointer active:scale-95 transition-transform touch-none">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+              </svg>
+              <span class="text-[8px] font-mono uppercase font-bold text-stone-400">RELOAD</span>
+            </button>
+
+            <!-- Touch Fire Mode Button (AUTO / SEMI) -->
+            <button id="touchFireModeBtn" class="px-3 py-2 rounded-xl bg-stone-900/70 active:bg-stone-700 border border-amber-500/80 text-[10px] font-mono font-bold text-amber-400 backdrop-blur-md shadow-lg cursor-pointer active:scale-95 transition-transform touch-none">
+              AUTO
+            </button>
+          </div>
+
+          <!-- Main Thumb Arc: PRIMARY FIRE, ADS, JUMP, CROUCH -->
+          <div class="relative w-72 h-52 pointer-events-auto">
+            <!-- PRIMARY FIRE BUTTON (Large, comfortable sweet-spot for right thumb) -->
+            <button id="touchFireBtn" class="absolute right-0 bottom-4 w-22 h-22 sm:w-24 sm:h-24 rounded-full bg-red-950/80 active:bg-red-600 border-3 border-red-500 active:border-red-300 shadow-[0_0_25px_rgba(239,68,68,0.6)] flex items-center justify-center text-white active:scale-95 transition-transform cursor-pointer touch-none">
+              <svg class="w-10 h-10 sm:w-11 sm:h-11 text-red-300" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v4m0 12v4M2 12h4m12 0h4" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+              </svg>
+            </button>
+
+            <!-- ADS (Aim Down Sights) BUTTON -->
+            <button id="touchAdsBtn" class="absolute right-26 bottom-20 w-15 h-15 rounded-full bg-stone-900/70 active:bg-amber-500 border-2 border-stone-500/80 active:border-amber-300 shadow-xl flex flex-col items-center justify-center text-stone-300 active:text-stone-950 active:scale-95 transition-all cursor-pointer touch-none">
+              <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="12" cy="12" r="9"/>
+                <circle cx="12" cy="12" r="3"/>
+                <line x1="12" y1="3" x2="12" y2="7"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+                <line x1="3" y1="12" x2="7" y2="12"/>
+                <line x1="17" y1="12" x2="21" y2="12"/>
+              </svg>
+              <span class="text-[8px] font-mono font-bold uppercase">AIM</span>
+            </button>
+
+            <!-- JUMP BUTTON -->
+            <button id="touchJumpBtn" class="absolute right-24 bottom-2 w-14 h-14 rounded-full bg-stone-900/70 active:bg-stone-700 border-2 border-stone-500/80 shadow-xl flex flex-col items-center justify-center text-stone-300 active:text-amber-400 active:scale-95 transition-transform cursor-pointer touch-none">
+              <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <path d="M12 19V5M5 12l7-7 7 7"/>
+              </svg>
+              <span class="text-[8px] font-mono font-bold uppercase">JUMP</span>
+            </button>
+
+            <!-- CROUCH BUTTON -->
+            <button id="touchCrouchBtn" class="absolute right-42 bottom-3 w-14 h-14 rounded-full bg-stone-900/70 active:bg-stone-700 border-2 border-stone-500/80 shadow-xl flex flex-col items-center justify-center text-stone-300 active:text-amber-400 active:scale-95 transition-transform cursor-pointer touch-none">
+              <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <path d="M12 5v14M19 12l-7 7-7-7"/>
+              </svg>
+              <span class="text-[8px] font-mono font-bold uppercase">CROUCH</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- TOP RIGHT TACTICAL PAUSE MENU BUTTON (Accessible on touch without ESC key) -->
+      <button id="touchPauseBtn" class="absolute top-4 right-4 pointer-events-auto p-2.5 rounded-xl bg-stone-900/80 active:bg-stone-800 border border-stone-700/80 text-amber-400 active:text-amber-300 shadow-xl backdrop-blur-md flex items-center gap-1.5 cursor-pointer touch-none">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+        </svg>
+        <span class="text-[11px] font-mono font-bold uppercase hidden sm:inline">MENU</span>
+      </button>
+    </div>
+
+    <!-- INSTRUCTOR DIALOGUE MODAL (High z-index, pointer-events-auto) -->
+    <div id="dialogueModal" class="fixed inset-0 bg-stone-950/75 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden pointer-events-auto">
+      <div class="bg-stone-900 border border-stone-700 rounded-xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 pointer-events-auto" onclick="event.stopPropagation()">
+        <div class="flex items-start gap-4">
+          <div class="w-14 h-14 rounded-lg bg-amber-900/40 border border-amber-600 flex items-center justify-center text-amber-400 font-extrabold text-lg shrink-0 font-mono">
+            VANCE
+          </div>
+          <div>
+            <h2 id="dialogueSpeaker" class="text-lg font-bold text-white">Master Gunnery Sgt. Vance</h2>
+            <div id="dialogueTitle" class="text-xs text-amber-400 font-mono">Range Master · Range Alpha</div>
+          </div>
+        </div>
+        <p id="dialogueMessage" class="text-stone-300 text-sm leading-relaxed border-t border-b border-stone-800 py-3">
+          Good to have you on the line. What drill are we running?
+        </p>
+        <div id="dialogueOptions" class="flex flex-col gap-2">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- TACTICAL PAUSE & SETTINGS MENU -->
+    <div id="pauseMenu" class="fixed inset-0 bg-stone-950/80 backdrop-blur-md z-40 flex items-center justify-center p-4 hidden pointer-events-auto">
+      <div class="bg-stone-900 border border-stone-700 rounded-xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 pointer-events-auto" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between border-b border-stone-800 pb-3">
+          <div>
+            <h2 class="text-xl font-bold text-white tracking-wide">TACTICAL COMMAND</h2>
+            <div class="text-xs font-mono text-stone-400">Simulation Suspended · Press ESC to resume</div>
+          </div>
+          <button id="resumeBtn" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded transition-colors cursor-pointer">
+            RESUME
+          </button>
+        </div>
+
+        <!-- Drills Quick Selector -->
+        <div class="flex flex-col gap-2">
+          <span class="text-xs font-mono text-stone-400 uppercase font-semibold">Select Drill Scenario</span>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="drillRangeBtn" class="p-2.5 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded text-left text-xs text-stone-200 transition-colors cursor-pointer">
+              <div class="font-bold text-amber-400">100m Steel Range</div>
+              <div class="text-[10px] text-stone-400">Reactive popper targets</div>
+            </button>
+            <button id="drillCqbBtn" class="p-2.5 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded text-left text-xs text-stone-200 transition-colors cursor-pointer">
+              <div class="font-bold text-amber-400">CQB Killhouse</div>
+              <div class="text-[10px] text-stone-400">Room clearing & bots</div>
+            </button>
+            <button id="drillSurvivalBtn" class="p-2.5 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded text-left text-xs text-stone-200 transition-colors cursor-pointer">
+              <div class="font-bold text-amber-400">Wave Defense</div>
+              <div class="text-[10px] text-stone-400">Escalating hostile squad</div>
+            </button>
+            <button id="drillFreeBtn" class="p-2.5 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded text-left text-xs text-stone-200 transition-colors cursor-pointer">
+              <div class="font-bold text-amber-400">Free Playground</div>
+              <div class="text-[10px] text-stone-400">Open exploration & bots</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Settings Sliders -->
+        <div class="flex flex-col gap-3 border-t border-stone-800 pt-2">
+          <!-- Touch Controls Toggle -->
+          <div class="flex items-center justify-between p-2 rounded-lg bg-stone-800/60 border border-stone-700/60">
+            <div class="flex flex-col">
+              <span class="text-xs font-bold text-stone-200">Touchscreen Overlay</span>
+              <span class="text-[10px] text-stone-400 font-mono">Dual-thumb joystick & buttons</span>
+            </div>
+            <button id="toggleTouchBtn" class="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold font-mono transition-colors cursor-pointer">
+              TOUCH: ON
+            </button>
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between text-xs font-mono">
+              <span class="text-stone-300">Touch Look Sensitivity</span>
+              <span id="touchSensVal" class="text-amber-400">3.2</span>
+            </div>
+            <input type="range" id="touchSensSlider" min="1.0" max="8.0" step="0.2" value="3.2" class="w-full accent-amber-500 bg-stone-800 cursor-pointer">
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between text-xs font-mono">
+              <span class="text-stone-300">Mouse Sensitivity</span>
+              <span id="sensVal" class="text-amber-400">2.0</span>
+            </div>
+            <input type="range" id="sensSlider" min="0.5" max="5.0" step="0.1" value="2.0" class="w-full accent-amber-500 bg-stone-800 cursor-pointer">
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between text-xs font-mono">
+              <span class="text-stone-300">Master Audio Volume</span>
+              <span id="volVal" class="text-amber-400">80%</span>
+            </div>
+            <input type="range" id="volSlider" min="0" max="100" step="5" value="80" class="w-full accent-amber-500 bg-stone-800 cursor-pointer">
+          </div>
+        </div>
+
+        <!-- Controls Reference -->
+        <div class="border-t border-stone-800 pt-2 text-[10px] font-mono text-stone-400 flex flex-col gap-1">
+          <div class="text-amber-400 font-bold uppercase text-[9px] mb-0.5">Galaxy Tab S8 / Touchscreen:</div>
+          <div class="flex justify-between"><span>LEFT THUMB: Virtual Joystick (Move & Sprint)</span><span>RIGHT THUMB: Swipe Aim / Shoot</span></div>
+          <div class="flex justify-between"><span>ADS / JUMP / CROUCH / RELOAD / MEDKIT</span><span>TOP RIGHT: Menu ⚙</span></div>
+          <div class="text-stone-500 font-bold uppercase text-[9px] mt-1 mb-0.5">Desktop Keyboard & Mouse:</div>
+          <div class="flex justify-between"><span>WASD: Move · MOUSE: Look</span><span>LEFT/RIGHT CLICK: Fire / ADS</span></div>
+          <div class="flex justify-between"><span>4 / G: IFAK Medkit · R: Reload</span><span>SHIFT: Sprint · C: Crouch · SPACE: Jump</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAME OVER / CASUALTY MODAL -->
+    <div id="gameOverModal" class="fixed inset-0 bg-red-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden pointer-events-auto">
+      <div class="bg-stone-900 border border-red-800 rounded-xl max-w-sm w-full p-6 text-center shadow-2xl flex flex-col gap-4">
+        <div class="text-red-500 text-3xl font-extrabold font-mono tracking-wider">OPERATOR DOWN</div>
+        <p class="text-stone-300 text-xs">Vital organs failed due to penetrating combat trauma.</p>
+        <div class="bg-stone-950 border border-stone-800 rounded p-3 flex flex-col gap-1 text-xs font-mono">
+          <div class="flex justify-between text-stone-400"><span>Score:</span><span id="goScore" class="text-white font-bold">0</span></div>
+          <div class="flex justify-between text-stone-400"><span>Hostiles Cleared:</span><span id="goKills" class="text-white font-bold">0</span></div>
+          <div class="flex justify-between text-stone-400"><span>Targets Hit:</span><span id="goTargets" class="text-white font-bold">0</span></div>
+        </div>
+        <button id="respawnBtn" class="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded transition-colors uppercase tracking-wider cursor-pointer">
+          Respawn at Armory Safe Zone
+        </button>
+      </div>
+    </div>
+
+    <!-- START / CLICK TO DEPLOY SCREEN -->
+    <div id="startScreen" class="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 pointer-events-auto">
+      <div class="bg-stone-900 border border-stone-800 rounded-2xl max-w-xl w-full p-8 shadow-2xl flex flex-col gap-6 text-center">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-stone-800 text-amber-400 font-mono text-xs mb-3 border border-stone-700">
+            <span id="engineBadge">⚡ Initializing Engine...</span>
+          </div>
+          <h1 class="text-3xl font-black text-white tracking-tight">RANGE ALPHA · AK-47 OPERATOR</h1>
+          <p class="text-stone-300 text-sm mt-2 max-w-md mx-auto leading-relaxed">
+            Authentic 7.62x39mm ballistics, modular soldier anatomical health, NIJ Level IV plate armor, equippable IFAK medkits, and cover-seeking combat AI.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 text-left">
+          <div class="bg-stone-950/70 border border-stone-800 rounded-lg p-3">
+            <div class="text-amber-400 font-bold text-xs font-mono">ANATOMICAL HEALTH</div>
+            <div class="text-[11px] text-stone-400 mt-1">Head, thorax, chest plate, abdomen, and limbs with IFAK medkit healing.</div>
+          </div>
+          <div class="bg-stone-950/70 border border-stone-800 rounded-lg p-3">
+            <div class="text-amber-400 font-bold text-xs font-mono">STRAIGHT BALLISTICS</div>
+            <div class="text-[11px] text-stone-400 mt-1">Laser-accurate 7.62mm point of aim with realistic recoil spring recovery.</div>
+          </div>
+          <div class="bg-stone-950/70 border border-stone-800 rounded-lg p-3">
+            <div class="text-amber-400 font-bold text-xs font-mono">ARMORY SAFE ZONE</div>
+            <div class="text-[11px] text-stone-400 mt-1">Sgt. Vance staging post is 100% safe. Step past yellow line to fight.</div>
+          </div>
+        </div>
+
+        <button id="deployBtn" class="w-full py-4 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-sm rounded-xl transition-all transform active:scale-95 shadow-lg tracking-wider uppercase flex items-center justify-center gap-2 cursor-pointer">
+          <span>DEPLOY OPERATOR (TAP OR CLICK TO PLAY)</span>
+        </button>
+
+        <div class="text-[11px] font-mono text-stone-400 flex flex-col gap-0.5">
+          <span class="text-amber-400 font-bold">Touchscreen & Tablet Ready (Galaxy Tab S8 Dual-Thumb Joystick & Aim)</span>
+          <span class="text-stone-500">Also supports Desktop Keyboard (WASD) & Mouse Look</span>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

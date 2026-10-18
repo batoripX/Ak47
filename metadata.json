@@ -1,0 +1,6 @@
+{
+  "name": "AK-47 Tactical Operator: WebGPU Military Compound",
+  "description": "High-performance first-person tactical shooter in Babylon.js and WebGPU with an AK-47 assault rifle, advanced cover-seeking AI combatants, humanoid character models, and outdoor military testing playground.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
